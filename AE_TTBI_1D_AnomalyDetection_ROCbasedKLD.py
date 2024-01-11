@@ -47,10 +47,8 @@ def data_split(data, p=0.1):
 
 
 #Importa os dados
-
 #Inserir o posicionamento do sensor (VG: Vagão, TF: Truque frontal, TT: Truque Traseiro, RF: Roda frontal)
 #Inserir o vagão monitorado (PrimVag: Primeiro vagão, UltVag: Ultimo Vagão)
-
 PosSensor = 'TT'
 Vagao = 'UltVag'
 
@@ -64,8 +62,6 @@ Baseline = DadosAll['Baseline']               # Sem dano
 Teste_CincoP =  DadosAll['CincoP']            # 5% de dano
 Teste_DezP =  DadosAll['DezP']                # 10% de dano
 Teste_VinteP =  DadosAll['VinteP']            # 20% de dano
-#Teste_CinquentaP =  DadosAll['CinquentaP']    # 50% de dano
-
 
 #Construir o modelo # testar: arquitetura
 class AnomalyDetector(Model):
@@ -103,18 +99,13 @@ Teste_Baseline = np.array(baseline_valid)  #Transforma em array para não usar o
 #Normalize os dados para [0,1]
 baseline_train = (baseline_train - min_val) / (max_val - min_val)
 baseline_valid = (baseline_valid - min_val) / (max_val - min_val)
-
-
 baseline_train = tf.cast(baseline_train, tf.float32)
 baseline_valid = tf.cast(baseline_valid, tf.float32)
 
 
 ############### Deteccao de danos dos dados de teste ##########################
-
 Caso = ['Teste_Baseline_splitted', 'Teste_CincoP_splitted','Teste_DezP_splitted','Teste_VinteP_splitted','Teste_CinquentaP_splitted']
 Placement = ['VG', 'TF', 'TT', 'RF']
-
-##################### Divergência de Kullback-Leibler #########################
 
 
 # --------------------------------- Plots ------------------------------------#
@@ -125,6 +116,10 @@ color_placement = ['purple', 'g', 'r', 'c']
 linha = [(5, (10, 3)), 'solid', 'solid', 'solid', 'solid']
 legend_placement = ['Car body', 'Front bogie' , 'Rear bogie', 'Front wheel']
 
+def round_up(n, decimals=0): 
+    multiplier = 10 ** decimals 
+    return math.ceil(n * multiplier) / multiplier
+
 def run_autoencoder(baseline_train, baseline_valid):
     
     autoencoder = AnomalyDetector()
@@ -133,7 +128,7 @@ def run_autoencoder(baseline_train, baseline_valid):
     #Observe que o autoencoder é treinado usando apenas os dados do cenario sem dano
     callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=200)
     history = autoencoder.fit(baseline_train, baseline_train, 
-              epochs=1000,  #1000 
+              epochs=200,  #1000 
               batch_size=32,
               validation_data=(baseline_valid, baseline_valid),
               shuffle=True,
@@ -141,36 +136,6 @@ def run_autoencoder(baseline_train, baseline_valid):
     
     return autoencoder, history
 
-def plot_reconstruction(autoencoder):
-    
-    autoencoder, history = run_autoencoder(baseline_train, baseline_valid)
-    
-    Teste_Caso = Caso[3]
-    Teste_VinteP_splitted = data_split(Teste_VinteP, p=0.8)
-    Teste = eval(Teste_Caso)
-    
-    teste_data = (Teste - min_val) / (max_val - min_val)
-    teste_data = tf.cast(teste_data, tf.float32)
-
-    encoded_data = autoencoder.encoder(teste_data).numpy()
-    decoded_data = autoencoder.decoder(encoded_data).numpy()
-    
-
-    plt.plot(teste_data[0], 'b', linewidth=0.5)
-    plt.plot(decoded_data[0], 'r', linewidth=0.5)
-    #plt.fill_between(np.arange(5830), decoded_data[0], teste_data[0], color='lightcoral')
-    plt.legend(labels=["Baseline", "Reconstructed "], loc=(0.71, 0.01), fontsize=28)
-    plt.ylabel("Acceleration (m/s²)", fontsize=28)
-    plt.xlabel("Location (cm)", fontsize=28)
-    plt.xticks(fontsize=26)
-    plt.yticks(fontsize=26)
-
-    fig = plt.gcf()
-    #ax = fig.add_subplot(111)
-    fig.set_size_inches(12, 9)
-    ax.margins(x=0)
-    
-    plt.savefig(f'Reconstruction_{PosSensor}_{Teste_Caso}.png', bbox_inches='tight', dpi=300)
 
 def plot_trainloss():
     
@@ -217,7 +182,7 @@ def plot_trainloss():
         #Observe que o autoencoder é treinado usando apenas os dados do cenario sem dano
         callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=100)
         history = autoencoder.fit(baseline_train, baseline_train, 
-                  epochs=1000, 
+                  epochs=100, 
                   batch_size=32,
                   validation_data=(baseline_valid, baseline_valid),
                   shuffle=True,
@@ -236,20 +201,45 @@ def plot_trainloss():
     fig.set_size_inches(10, 10)
     fig.savefig(f'TrainLoss_{Vagao}_FourSensors.png', dpi=300, bbox_inches='tight')
     
+
+def plot_reconstruction():
+    
+    autoencoder, history = run_autoencoder(baseline_train, baseline_valid)
+    
+    Teste_Caso = Caso[3]
+    Teste_VinteP_splitted = data_split(Teste_VinteP, p=0.8)
+    Teste = eval(Teste_Caso)
+    
+    teste_data = (Teste - min_val) / (max_val - min_val)
+    teste_data = tf.cast(teste_data, tf.float32)
+
+    encoded_data = autoencoder.encoder(teste_data).numpy()
+    decoded_data = autoencoder.decoder(encoded_data).numpy()
+    
+
+    plt.plot(teste_data[0], 'b', linewidth=0.5)
+    plt.plot(decoded_data[0], 'r', linewidth=0.5)
+    #plt.fill_between(np.arange(5830), decoded_data[0], teste_data[0], color='lightcoral')
+    plt.legend(labels=["Baseline", "Reconstructed "], loc=(0.71, 0.01), fontsize=28)
+    plt.ylabel("Acceleration (m/s²)", fontsize=28)
+    plt.xlabel("Location (cm)", fontsize=28)
+    plt.xticks(fontsize=26)
+    plt.yticks(fontsize=26)
+
+    fig = plt.gcf()
+    #ax = fig.add_subplot(111)
+    fig.set_size_inches(12, 9)
+    ax.margins(x=0)
+    
+    plt.savefig(f'Reconstruction_{PosSensor}_{Teste_Caso}.png', bbox_inches='tight', dpi=300)
+
+
     
 def plot_scatterMAE():
     
     # --------------------- Treino --------------------------
     n_teste = 0.2  #Testado 20% dos dados = 200 passagens
     ncenarios = 4  #Cenarios estudados (baseline, 5%, 10%, 20%)
-
-    DadosAll = loadmat(f'Data04-08_{PosSensor}_{Vagao}_Cut.mat') # Todos os conjuntos de dados (Baseline, 5P, 10P, 20P, 50P)
-    DadosAll.keys()
-    sorted(DadosAll.keys())
-    Baseline = DadosAll['Baseline']               # Sem dano
-    Teste_CincoP =  DadosAll['CincoP']            # 5% de dano
-    Teste_DezP =  DadosAll['DezP']                # 10% de dano
-    Teste_VinteP =  DadosAll['VinteP']            # 20% de dano
     
     Baseline_splitted = data_split(Baseline, p=1)
 
@@ -270,43 +260,27 @@ def plot_scatterMAE():
     autoencoder, history = run_autoencoder(baseline_train, baseline_valid)
     
     #----------------------- Teste ------------------------
-    
-    n_it = 1 #Numero de amostras
-    n_vbatch = 12 #Conjuntos de passagens de veículos analisados (50 a 400 de 50 em 50)
     totalPass = 200
     n_pass_base = (totalPass/100) #Numero de passagens de veículos (200)
     n_pass_dano = (totalPass/1000) #Idem ''                ''             ''
     
-    #Teste = np.zeros((ncenarios, Teste_Baseline.shape[0], Teste_Baseline.shape[1], n_it, n_vbatch))
     Teste = np.zeros((ncenarios, 200))
-    
-
-    p_base = n_pass_base
-    p_dano = n_pass_dano
     yte = np.zeros((ncenarios, 200)) #Scatter plot do ultimo batch de veiculos 
             
     for t in range(ncenarios):
         
       Teste_Caso = Caso[t]
       
-      Teste_Baseline_splitted = data_split(Teste_Baseline, p=p_base) #Não usa os dados de treinamento para o teste
-      Teste_CincoP_splitted = data_split(Teste_CincoP, p=p_dano)
-      Teste_DezP_splitted = data_split(Teste_DezP, p=p_dano)
-      Teste_VinteP_splitted = data_split(Teste_VinteP, p=p_dano)
+      Teste_Baseline_splitted = data_split(Teste_Baseline, p=n_pass_base) #Não usa os dados de treinamento para o teste
+      Teste_CincoP_splitted = data_split(Teste_CincoP, p=n_pass_dano)
+      Teste_DezP_splitted = data_split(Teste_DezP, p=n_pass_dano)
+      Teste_VinteP_splitted = data_split(Teste_VinteP, p=n_pass_dano)
 
       Teste = eval(Teste_Caso)
       
       teste_data = (Teste - min_val) / (max_val - min_val)
       teste_data = tf.cast(teste_data, tf.float32)
-      
-      #Crie um gráfico semelhante, desta vez para o teste com dano
-      encoded_data = autoencoder.encoder(teste_data).numpy()
-      decoded_data = autoencoder.decoder(encoded_data).numpy()
-      
-                  
-      #Se você examinar o erro de reconstrução dos exemplos anômalos no conjunto de 
-      #teste, notará que a maioria tem um erro de reconstrução maior do que o limite.
-      #Variando o limite, você pode ajustar a precisão e a recuperação do seu classificador.
+                        
       reconstructions = autoencoder.predict(teste_data)
       test_loss = tf.keras.losses.mae(reconstructions, teste_data)
       
@@ -321,32 +295,26 @@ def plot_scatterMAE():
         
       
     x = np. linspace (0, 1, 800) #dados de teste
-    
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)   
-    
+      
     #Scatter of MAE for each scenario
-    ax1.scatter(x[:200], yte[0, :], s=6, marker="o", c=cor[0], linewidths=0.5)
-    ax1.scatter(x[200:400], yte[1, :], s=6, marker="o", c=cor[1], linewidths=0.5)
-    ax1.scatter(x[400:600], yte[2, :], s=6, marker="o", c=cor[2], linewidths=0.5)
-    ax1.scatter(x[600:800], yte[3, :], s=6, marker="o", c=cor[3], linewidths=0.5)
+    ax.scatter(x[:200], yte[0, :], s=6, marker="o", c=cor[0], linewidths=0.5)
+    ax.scatter(x[200:400], yte[1, :], s=6, marker="o", c=cor[1], linewidths=0.5)
+    ax.scatter(x[400:600], yte[2, :], s=6, marker="o", c=cor[2], linewidths=0.5)
+    ax.scatter(x[600:800], yte[3, :], s=6, marker="o", c=cor[3], linewidths=0.5)
 
-    ax1.margins(x=0)
+    ax.margins(x=0)
 
     #Linha vertical para dividir dois cenarios
-    ax1.axvline(x = x[200], color='black', linestyle='-', linewidth=0.4)
-    ax1.axvline(x = x[400], color='black', linestyle='-', linewidth=0.4)
-    ax1.axvline(x = x[600], color='black', linestyle='-', linewidth=0.4)
+    ax.axvline(x = x[200], color='black', linestyle='-', linewidth=0.4)
+    ax.axvline(x = x[400], color='black', linestyle='-', linewidth=0.4)
+    ax.axvline(x = x[600], color='black', linestyle='-', linewidth=0.4)
     plt.scatter
     
     x1 = [x[100],x[300],x[500],x[700]]
     squad = ['Baseline','DC1', 'DC2','DC3']
     
-    ax1.set_xticks(x1)
-    ax1.set_xticklabels(squad, minor=False, fontsize=26)
+    ax.set_xticks(x1)
+    ax.set_xticklabels(squad, minor=False, fontsize=26)
     yticks = np.linspace(0, 0.03, num=7, endpoint=True)
     plt.yticks(yticks, fontsize=26)
     plt.xlabel("Scenario", fontsize=28)
@@ -355,139 +323,14 @@ def plot_scatterMAE():
     plt.show()
     fig.savefig(f'ScatterMAE_{totalPass}Pass_{PosSensor}_{Vagao}.png', dpi=300, bbox_inches='tight')
 
-def round_up(n, decimals=0): 
-    multiplier = 10 ** decimals 
-    return math.ceil(n * multiplier) / multiplier
 
 
-def plot_KLD(ncenarios):
-    n_it = 1 #Numero de amostras
-    n_vbatch = 10 #Conjuntos de passagens de veículos analisados (50 a 400 de 50 em 50)
-    n_pass_base = np.linspace((0.01/n_teste), (0.1/n_teste), num=n_vbatch)  #Numero de passagens de veículos (de 50 a 400 passagens dos dados de teste(validacao))
-    n_pass_dano = np.linspace(0.01, 0.1, num=n_vbatch)  #Idem ''                ''             ''
-
-    nPosVeh = 4
-    Vagao = 'PrimVag'
+def plot_lognormalMAE():
     
-    #plt.figure(figsize=(12, 9))  # Cria uma única figura
-    for i in range(nPosVeh):
-        
-        PosSensor = Placement[i]
-        
-        Teste_CincoP_splitted = data_split(Teste_CincoP, p=n_pass_dano[0])
-        
-        Teste = np.zeros((ncenarios, Teste_Baseline.shape[0], Teste_Baseline.shape[1], n_it, n_vbatch))
-        Media = np.zeros((ncenarios, n_it, n_vbatch))
-        Desvio = np.zeros((ncenarios, n_it, n_vbatch))
-        MediaTrain = np.zeros((ncenarios, n_it, n_vbatch))
-        DesvioTrain = np.zeros((ncenarios, n_it, n_vbatch))
-        
-        autoencoder, history = run_autoencoder(baseline_train, baseline_valid)
-        
-        for n in range(n_vbatch):  
-            p_base = n_pass_base[n]
-            p_dano = n_pass_dano[n]
-                
-            for iter in range(n_it):
-              print('Iteração: ', iter)
-                           
-              encoded_data = autoencoder.encoder(baseline_train).numpy()
-              decoded_data = autoencoder.decoder(encoded_data).numpy()
-
-              reconstructions_train = autoencoder.predict(baseline_train)
-              train_loss = tf.keras.losses.mae(reconstructions_train, baseline_train)
-
-              #Ajuste de uma distribuição normal para Y=ln(train_loss)
-              train_norm_log = np.log(train_loss)
-              normFittolog_train = scipy.stats.norm.fit(train_norm_log)
-
-              MediaTrain[iter] = normFittolog_train[0]
-              DesvioTrain[iter] = normFittolog_train[1]
-              
-              for t in range(ncenarios):
-                Teste_Caso = Caso[t]
-                
-                Teste_Baseline_splitted = data_split(Teste_Baseline, p=p_base) #Não usa os dados de treinamento para o teste
-                Teste_CincoP_splitted = data_split(Teste_CincoP, p=p_dano)
-                Teste_DezP_splitted = data_split(Teste_DezP, p=p_dano)
-                Teste_VinteP_splitted = data_split(Teste_VinteP, p=p_dano)
-                #Teste_CinquentaP_splitted = data_split(Teste_CinquentaP, p=p_dano)
-                
-                #Teste[t,:,:,iter,n] = eval(Teste_Caso)
-                Teste = eval(Teste_Caso)
-                
-                teste_data = (Teste - min_val) / (max_val - min_val)
-                teste_data = tf.cast(teste_data, tf.float32)
-                
-                #Crie um gráfico semelhante, desta vez para o teste com dano
-                encoded_data = autoencoder.encoder(teste_data).numpy()
-                decoded_data = autoencoder.decoder(encoded_data).numpy()
-                
-                            
-                #Se você examinar o erro de reconstrução dos exemplos anômalos no conjunto de 
-                #teste, notará que a maioria tem um erro de reconstrução maior do que o limite.
-                #Variando o limite, você pode ajustar a precisão e a recuperação do seu classificador.
-                reconstructions = autoencoder.predict(teste_data)
-                test_loss = tf.keras.losses.mae(reconstructions, teste_data)
-                
-                #Ajusta a distribuição lognormal para os dados de teste
-                test_norm_log = np.log(test_loss)
-                normFittolog_test = scipy.stats.norm.fit(test_norm_log)
-                
-                
-                #Media[t, iter, n] = MediaTestNC/fc   #Media do teste corrigido pelo fc
-                Media[t, iter, n] = normFittolog_test[0]
-                Desvio[t, iter, n] = normFittolog_test[1]
-                              
-                print('Media=')
-                print(Media[0,0,0])
-                
-        
-        n_vbatch = len(Media[0,0,:]) # Numero de conjunto de passagens analizadas
-        ncenarios = len(Media[:,0,0]) #Numero de cenarios analisados
-    
-        #calculate (P || q)
-        DI = np.zeros((ncenarios, n_vbatch))
-        na = 0 #numero da amostra (só uma amostra de 400 dados)
-    
-        for nc in range (ncenarios):
-            for nb in range (n_vbatch):
-                
-                #KL Modificada (ln[]-...)
-                DKL = np.log(Desvio[nc,na,nb]/DesvioTrain)+((1/(2*(Desvio[nc,na,nb]**2)))*((DesvioTrain**2)+(Media[nc,na,nb]-MediaTrain)**2))-(1/2)      
-                DI[nc, nb] = np.log(DKL+math.exp(1))-1
-                
-                #KL Cantero:
-                #DKL = np.log(Desvio[nc,na,nb]/DesvioTrain)+((1/(2*(Desvio[nc,na,nb]**2)))*(((Desvio[nc,na,nb]**2)-(DesvioTrain**2))+(Media[nc,na,nb]-MediaTrain)**2))           
-                #DI[nc, nb] = np.log(DKL+math.exp(1))
-    
-        DamageIndex = DI
-       
-        xmin = n_pass_base[0]*Teste_Baseline.shape[0]
-        xmax = n_pass_base[-1:]*Teste_Baseline.shape[0]
-        x = np.linspace(xmin,xmax,n_vbatch)
-    
-        for i in range(ncenarios):
-            ax1.plot(x, DamageIndex[i,:], linestyle=linha[i], linewidth=1.8,  marker="o", markersize = 12, color=cor[i], markerfacecolor=cor[i])
-    
-        ylabel_max = round_up(n=max(max(DamageIndex[-1:,:])))
-
-    xticks = np.linspace(0, 100, 10, endpoint=True)
-    yticks = np.linspace(0, 1.2, num=7, endpoint=True)
-    #plt.legend(legenda, loc=(0.65, 0.65), numpoints =1, fontsize=25)
-    plt.xlabel('Number of vehicle-crossing', fontsize=28)
-    plt.xticks(xticks, fontsize=26)
-    plt.yticks(yticks, fontsize=26)
-    plt.ylabel('Damage index (KLD)', fontsize=28)
-    fig.set_size_inches(10, 10)
-    fig.savefig(f'KLD_{Teste_Baseline.shape[0]}Pass_{PosSensor}_{Vagao}.png', dpi=300, bbox_inches='tight')
-
-    return 
-
-
-def plot_lognormalMAE(Media, Desvio, ax):
+    ncenarios=4
     
     autoencoder, history = run_autoencoder(baseline_train, baseline_valid)
+    Media, Desvio = plot_KLD(ncenarios)
     
     for i in range(ncenarios):
  
@@ -515,11 +358,128 @@ def plot_lognormalMAE(Media, Desvio, ax):
     plt.legend(legenda, loc=(0.64, 0.64), numpoints =1, fontsize=26)
     fig.savefig(f'DistribuicaoLogN_{PosSensor}_{Vagao}.png', dpi=300, bbox_inches='tight')
     
+
+def plot_KLD(ncenarios):
+    
+    n_it = 1 #Numero de amostras
+    n_vbatch = 4 #Conjuntos de passagens de veículos analisados (50 a 400 de 50 em 50)
+    n_pass_base = np.linspace((0.01/n_teste), (0.1/n_teste), num=n_vbatch)  #Numero de passagens de veículos (de 50 a 400 passagens dos dados de teste(validacao))
+    n_pass_dano = np.linspace(0.01, 0.1, num=n_vbatch)  #Idem ''                ''             ''
+
+    nPosVeh = 4
+    Vagao = 'PrimVag'
+    
+    #plt.figure(figsize=(12, 9))  # Cria uma única figura
+    for i in range(nPosVeh):
+        
+        PosSensor = Placement[i]
+        
+        Teste_CincoP_splitted = data_split(Teste_CincoP, p=n_pass_dano[0])
+        
+        Teste = np.zeros((ncenarios, Teste_Baseline.shape[0], Teste_Baseline.shape[1], n_it, n_vbatch))
+        Media = np.zeros((ncenarios, n_it, n_vbatch))
+        Desvio = np.zeros((ncenarios, n_it, n_vbatch))
+        
+        
+        MediaTrain = np.zeros((n_it))
+        DesvioTrain = np.zeros((n_it))
+        MedianaTrain = np.zeros((n_it))
+        
+        autoencoder, history = run_autoencoder(baseline_train, baseline_valid)
+        
+        for n in range(n_vbatch):  
+            p_base = n_pass_base[n]
+            p_dano = n_pass_dano[n]
+                
+            for iter in range(n_it):
+              print('Iteração: ', iter)
+                           
+              encoded_data = autoencoder.encoder(baseline_train).numpy()
+
+              reconstructions_train = autoencoder.predict(baseline_train)
+              train_loss = tf.keras.losses.mae(reconstructions_train, baseline_train)
+
+              #Ajuste de uma distribuição normal para Y=ln(train_loss)
+              train_norm_log = np.log(train_loss)
+              normFittolog_train = scipy.stats.norm.fit(train_norm_log)
+
+              MediaTrain[iter] = normFittolog_train[0]
+              DesvioTrain[iter] = normFittolog_train[1]
+              
+              for t in range(ncenarios):
+                Teste_Caso = Caso[t]
+                
+                Teste_Baseline_splitted = data_split(Teste_Baseline, p=p_base) #Não usa os dados de treinamento para o teste
+                Teste_CincoP_splitted = data_split(Teste_CincoP, p=p_dano)
+                Teste_DezP_splitted = data_split(Teste_DezP, p=p_dano)
+                Teste_VinteP_splitted = data_split(Teste_VinteP, p=p_dano)
+
+                Teste = eval(Teste_Caso)
+                
+                teste_data = (Teste - min_val) / (max_val - min_val)
+                teste_data = tf.cast(teste_data, tf.float32)
+                
+                #Crie um gráfico semelhante, desta vez para o teste com dano
+                encoded_data = autoencoder.encoder(teste_data).numpy()
+                reconstructions = autoencoder.predict(teste_data)
+                test_loss = tf.keras.losses.mae(reconstructions, teste_data)
+                
+                #Ajusta a distribuição lognormal para os dados de teste
+                test_norm_log = np.log(test_loss)
+                normFittolog_test = scipy.stats.norm.fit(test_norm_log)
+                
+                
+                #Media[t, iter, n] = MediaTestNC/fc   #Media do teste corrigido pelo fc
+                Media[t, iter, n] = normFittolog_test[0]
+                Desvio[t, iter, n] = normFittolog_test[1]
+                              
+                print('Media=')
+                print(Media[0,0,0])
+                
+        
+        n_vbatch = len(Media[0,0,:]) # Numero de conjunto de passagens analizadas
+        ncenarios = len(Media[:,0,0]) #Numero de cenarios analisados
+    
+        #calculate (P || q)
+        DI = np.zeros((ncenarios, n_vbatch))
+        na = 0 #numero da amostra (só uma amostra de 400 dados)
+    
+        for nc in range (ncenarios):
+            for nb in range (n_vbatch):
+                
+                DKL = np.log(Desvio[nc,na,nb]/DesvioTrain)+((1/(2*(Desvio[nc,na,nb]**2)))*((DesvioTrain**2)+(Media[nc,na,nb]-MediaTrain)**2))-(1/2)      
+                DI[nc, nb] = np.log(DKL+math.exp(1))-1
+    
+        DamageIndex = DI
+       
+        xmin = n_pass_base[0]*Teste_Baseline.shape[0]
+        xmax = n_pass_base[-1:]*Teste_Baseline.shape[0]
+        x = np.linspace(xmin,xmax,n_vbatch)
+    
+        for i in range(ncenarios):
+            ax.plot(x, DamageIndex[i,:], linestyle=linha[i], linewidth=1.8,  marker="o", markersize = 12, color=cor[i], markerfacecolor=cor[i])
+    
+        #ylabel_max = round_up(n=max(max(DamageIndex[-1:,:])))
+
+    xticks = np.linspace(0, 100, 10, endpoint=True)
+    yticks = np.linspace(0, 1.2, num=7, endpoint=True)
+    #plt.legend(legenda, loc=(0.65, 0.65), numpoints =1, fontsize=25)
+    plt.xlabel('Number of vehicle-crossing', fontsize=28)
+    plt.xticks(xticks, fontsize=26)
+    plt.yticks(yticks, fontsize=26)
+    plt.ylabel('Damage index (KLD)', fontsize=28)
+    fig.set_size_inches(10, 10)
+    fig.savefig(f'KLD_{Teste_Baseline.shape[0]}Pass_{PosSensor}_{Vagao}.png', dpi=300, bbox_inches='tight')
+
+    return Media, Desvio
+
+
+
 def plot_ROCbasedKLD(ntestes):
     
     #ntestes = 4
     n_it = 40 #Numero de amostras
-    n_vbatch = 10 #Numero de rodadas do AE - variabilidade do processador
+    n_vbatch = 5 #Numero de rodadas do AE - variabilidade do processador
     n_passagens = 50  #Numero de passagens para cada ponto da curva ROC
     n_passag = '50'
     
@@ -531,11 +491,7 @@ def plot_ROCbasedKLD(ntestes):
     Teste_CincoP_splitted = data_split(Teste_CincoP, p=n_pass_dano)
     Teste_DezP_splitted = data_split(Teste_DezP, p=n_pass_dano)
     Teste_VinteP_splitted = data_split(Teste_VinteP, p=n_pass_dano)
-    #Teste_CinquentaP_splitted = data_split(Teste_CinquentaP, p=n_pass_dano[0])
-    
-    #max_nteste = Teste_Baseline.shape[0]*n_pass_base[-1]
-    #Teste = np.zeros((ntestes, Teste_Baseline.shape[0]*n_pass_base[-1], Teste_CincoP_splitted.shape[1], n_it, n_vbatch))
-    #yte = np.zeros((ntestes, Teste_Baseline.shape[0]*n_pass_base[-1], n_it, n_vbatch))
+
     Media = np.zeros((ntestes, n_it, n_vbatch))
     Desvio = np.zeros((ntestes, n_it, n_vbatch))
     Mediana = np.zeros((ntestes, n_it, n_vbatch))
@@ -568,9 +524,8 @@ def plot_ROCbasedKLD(ntestes):
             Teste_CincoP_splitted = data_split(Teste_CincoP, p=n_pass_dano)
             Teste_DezP_splitted = data_split(Teste_DezP, p=n_pass_dano)
             Teste_VinteP_splitted = data_split(Teste_VinteP, p=n_pass_dano)
-            #Teste_CinquentaP_splitted = data_split(Teste_CinquentaP, p=p_dano)
-            
-            #Teste[t,:,:,iter,n] = eval(Teste_Caso)
+
+
             Teste = eval(Teste_Caso)
             
             teste_data = (Teste - min_val) / (max_val - min_val)
@@ -602,9 +557,8 @@ def plot_ROCbasedKLD(ntestes):
     ## ROC based KLD
     #calculate (P || q)
     n_thresholds = 5000
-    #na = 0 #numero da amostra (só uma amostra de 400 dados)
     
-    metrica = DI  #Media, Desvio ou Mediana
+    metrica = DI  #Media, Desvio, Mediana ou DI
     metric = 'DKL'
 
     verdadeiros_negativos = np.zeros((2, n_thresholds, n_vbatch)) #5% and 10%
@@ -667,7 +621,7 @@ def plot_ROCbasedKLD(ntestes):
     #plt.yticks(fontsize=28)
     plt.grid(True)
     fig.set_size_inches(10, 10)
-    fig.savefig(f'ROC_{n_passag}PassTeste_{PosSensor}_{Vagao}_{metric}_MAE.png', dpi=600, bbox_inches='tight')            
+    fig.savefig(f'ROC_{n_passag}PassTeste_{PosSensor}_{Vagao}_{metric}_MAE.png', dpi=300, bbox_inches='tight')            
 
 
 def plot_ROC_threshold():
@@ -809,26 +763,27 @@ def plot_ROC_threshold():
 
 
 
-#fig = plt.subplots()
-#plot_trainloss()
+# fig = plt.subplots()  #Ok
+# plot_trainloss()
 
-#fig, ax = plt.subplots()
-#plot_reconstruction(autoencoder=autoencoder)
+#fig, ax = plt.subplots()  #Ok
+#plot_reconstruction()
 
-#fig, ax = plt.subplots()
-#plot_lognormalMAE(Media=Media, Desvio=Desvio) 
+#fig, ax = plt.subplots()   #Ok
+#plot_scatterMAE()   
 
-#fig, ax1 = plt.subplots()
-#Media, Desvio, Mediana = plot_KLD(ncenarios=4)   
+#fig, ax = plt.subplots()    #OK
+#Media, Desvio = plot_KLD(ncenarios=4)   
 
-#fig, ax2  = plt.subplots()
-#plot_ROCbasedKLD(ntestes=ncenarios)
+#fig, ax = plt.subplots()   #+- Ok
+#plot_lognormalMAE() 
 
-fig, ax2  = plt.subplots()
-plot_ROC_threshold()
+fig, ax2  = plt.subplots()   #Ok
+plot_ROCbasedKLD(ntestes=ncenarios)
 
-#fig, ax3 = plt.subplots()
-#plot_scatterMAE()    
+# fig, ax2  = plt.subplots()    #Ok
+# plot_ROC_threshold()
+ 
 
 end_time = time.time()    # Record the end time
 
